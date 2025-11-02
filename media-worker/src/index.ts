@@ -2,7 +2,9 @@ import express, { Request, Response } from 'express'
 import dotenv from 'dotenv'
 import crypto from 'crypto'
 import { spawn } from 'child_process'
-import { Readable } from 'stream'
+import { promises as fs } from 'fs'
+import os from 'os'
+import path from 'path'
 
 dotenv.config()
 
@@ -63,6 +65,10 @@ interface TranscribeResponse {
 app.post('/transcribe', async (req: Request, res: Response) => {
   const startTime = Date.now()
 
+  // Temp file paths
+  let tempAudioFile: string | null = null
+  let tempWavFile: string | null = null
+
   try {
     // Step 1: Verify HMAC signature
     const receivedSignature = req.headers['x-signature'] as string
@@ -86,39 +92,85 @@ app.post('/transcribe', async (req: Request, res: Response) => {
 
     console.log(`[media-worker] Transcribing: ${videoUrl}`)
 
-    // Step 3: Extract audio using yt-dlp and ffmpeg
-    // Command: yt-dlp -f bestaudio -o - <url> | ffmpeg -i pipe:0 -ac 1 -ar 16000 -f wav pipe:1
+    // Step 3: Create temp file paths
+    const timestamp = Date.now()
+    const tempDir = os.tmpdir()
+    tempAudioFile = path.join(tempDir, `audio-${timestamp}.webm`)
+    tempWavFile = path.join(tempDir, `audio-${timestamp}.wav`)
 
-    const ytdlp = spawn('yt-dlp', [
-      '-f', 'bestaudio',
-      '-o', '-',
-      videoUrl
-    ])
+    console.log(`[media-worker] Downloading audio to ${tempAudioFile}`)
 
-    const ffmpeg = spawn('ffmpeg', [
-      '-i', 'pipe:0',         // Read from stdin
-      '-ac', '1',              // Mono audio
-      '-ar', '16000',          // 16kHz sample rate
-      '-f', 'wav',             // WAV format
-      'pipe:1'                 // Output to stdout
-    ])
+    // Step 4: Download audio using yt-dlp
+    await new Promise<void>((resolve, reject) => {
+      const ytdlp = spawn('yt-dlp', [
+        '-f', 'bestaudio',
+        '-o', tempAudioFile!,
+        videoUrl
+      ])
 
-    // Pipe yt-dlp output to ffmpeg input
-    ytdlp.stdout.pipe(ffmpeg.stdin)
+      let ytdlpErrors = ''
 
-    // Collect error logs
-    let ytdlpErrors = ''
-    let ffmpegErrors = ''
+      ytdlp.stderr.on('data', (data) => {
+        ytdlpErrors += data.toString()
+      })
 
-    ytdlp.stderr.on('data', (data) => {
-      ytdlpErrors += data.toString()
+      ytdlp.on('close', (code) => {
+        if (code === 0) {
+          console.log('[media-worker] Audio download complete')
+          resolve()
+        } else {
+          console.error('[media-worker] yt-dlp failed:', ytdlpErrors)
+          reject(new Error(`yt-dlp failed with code ${code}`))
+        }
+      })
+
+      ytdlp.on('error', (err) => {
+        console.error('[media-worker] yt-dlp spawn error:', err)
+        reject(err)
+      })
     })
 
-    ffmpeg.stderr.on('data', (data) => {
-      ffmpegErrors += data.toString()
+    console.log(`[media-worker] Converting to WAV: ${tempWavFile}`)
+
+    // Step 5: Convert to WAV using ffmpeg
+    await new Promise<void>((resolve, reject) => {
+      const ffmpeg = spawn('ffmpeg', [
+        '-i', tempAudioFile!,
+        '-ac', '1',              // Mono audio
+        '-ar', '16000',          // 16kHz sample rate
+        '-f', 'wav',             // WAV format
+        tempWavFile!
+      ])
+
+      let ffmpegErrors = ''
+
+      ffmpeg.stderr.on('data', (data) => {
+        ffmpegErrors += data.toString()
+      })
+
+      ffmpeg.on('close', (code) => {
+        if (code === 0) {
+          console.log('[media-worker] Audio conversion complete')
+          resolve()
+        } else {
+          console.error('[media-worker] ffmpeg failed:', ffmpegErrors)
+          reject(new Error(`ffmpeg failed with code ${code}`))
+        }
+      })
+
+      ffmpeg.on('error', (err) => {
+        console.error('[media-worker] ffmpeg spawn error:', err)
+        reject(err)
+      })
     })
 
-    // Step 4: Stream audio to Deepgram
+    console.log(`[media-worker] Reading WAV file for Deepgram`)
+
+    // Step 6: Read the WAV file
+    const audioBuffer = await fs.readFile(tempWavFile)
+    console.log(`[media-worker] Audio file size: ${(audioBuffer.length / 1024 / 1024).toFixed(2)} MB`)
+
+    // Step 7: Send to Deepgram
     const deepgramUrl = `https://api.deepgram.com/v1/listen?model=general&language=${langHint}`
 
     const deepgramResponse = await fetch(deepgramUrl, {
@@ -127,18 +179,12 @@ app.post('/transcribe', async (req: Request, res: Response) => {
         'Authorization': `Token ${DEEPGRAM_API_KEY}`,
         'Content-Type': 'audio/wav',
       },
-      body: Readable.toWeb(ffmpeg.stdout) as any, // Stream directly
-      // @ts-ignore - duplex is required for streaming but not in types
-      duplex: 'half',
+      body: audioBuffer,
     })
 
     if (!deepgramResponse.ok) {
       const errorText = await deepgramResponse.text()
       console.error('[media-worker] Deepgram API error:', errorText)
-
-      // Check for subprocess errors
-      if (ytdlpErrors) console.error('[media-worker] yt-dlp errors:', ytdlpErrors)
-      if (ffmpegErrors) console.error('[media-worker] ffmpeg errors:', ffmpegErrors)
 
       return res.status(500).json({
         error: 'Deepgram transcription failed',
@@ -146,9 +192,9 @@ app.post('/transcribe', async (req: Request, res: Response) => {
       })
     }
 
-    const deepgramData = await deepgramResponse.json()
+    const deepgramData = await deepgramResponse.json() as any
 
-    // Step 5: Extract transcript from Deepgram response
+    // Step 8: Extract transcript from Deepgram response
     const transcript = deepgramData.results?.channels?.[0]?.alternatives?.[0]?.transcript || ''
     const words = deepgramData.results?.channels?.[0]?.alternatives?.[0]?.words || []
     const duration = deepgramData.metadata?.duration || 0
@@ -173,6 +219,25 @@ app.post('/transcribe', async (req: Request, res: Response) => {
       error: 'Transcription failed',
       details: (error as Error).message,
     })
+  } finally {
+    // Step 9: Clean up temp files
+    try {
+      if (tempAudioFile) {
+        await fs.unlink(tempAudioFile)
+        console.log(`[media-worker] Cleaned up ${tempAudioFile}`)
+      }
+    } catch (err) {
+      console.error('[media-worker] Failed to delete temp audio file:', err)
+    }
+
+    try {
+      if (tempWavFile) {
+        await fs.unlink(tempWavFile)
+        console.log(`[media-worker] Cleaned up ${tempWavFile}`)
+      }
+    } catch (err) {
+      console.error('[media-worker] Failed to delete temp WAV file:', err)
+    }
   }
 })
 

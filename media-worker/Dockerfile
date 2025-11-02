@@ -25,8 +25,8 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
-# Install Node.js dependencies
-RUN npm ci --only=production
+# Install ALL Node.js dependencies (including dev for TypeScript build)
+RUN npm ci
 
 # Copy TypeScript config and source code
 COPY tsconfig.json ./
@@ -35,12 +35,12 @@ COPY src ./src
 # Build TypeScript
 RUN npm install -g typescript && tsc
 
-# Remove devDependencies and build artifacts
+# Remove devDependencies and build artifacts (keeps image small)
 RUN npm prune --production && rm -rf src tsconfig.json
 
-# Create non-root user
-RUN useradd -m -u 1000 worker && chown -R worker:worker /app
-USER worker
+# Use existing node user (already exists in node:20-slim)
+RUN chown -R node:node /app
+USER node
 
 # Expose port (default 3001)
 EXPOSE 3001

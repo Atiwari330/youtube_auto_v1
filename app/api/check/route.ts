@@ -21,7 +21,7 @@ export const maxDuration = 300 // 5 minutes max (can be increased for Vercel Pro
  * Main endpoint: Check for new YouTube videos and transcribe them
  *
  * Request body (optional):
- *   { "limit": 5 }  // Number of recent videos to check
+ *   { "limit": 1 }  // Number of recent videos to check
  *
  * Response:
  *   {
@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
   try {
     // Parse request body for optional limit parameter
     const body = await request.json().catch(() => ({}))
-    const limit = Math.min(body.limit || 5, 10) // Max 10 videos per check
+    const limit = Math.min(body.limit || 1, 1) // Only process latest video
 
     console.log(`[api/check] Starting check for new videos (limit: ${limit})`)
 

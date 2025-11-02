@@ -9,10 +9,8 @@ services:
     container_name: youtube-media-worker
     ports:
       - "3001:3001"
-    environment:
-      - PORT=3001
-      - MEDIA_WORKER_SECRET=${MEDIA_WORKER_SECRET}
-      - DEEPGRAM_API_KEY=${DEEPGRAM_API_KEY}
+    env_file:
+      - ./media-worker/.env
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://localhost:3001/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1))"]
