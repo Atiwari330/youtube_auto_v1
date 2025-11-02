@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  # Media Worker Service
+  media-worker:
+    build:
+      context: ./media-worker
+      dockerfile: Dockerfile
+    container_name: youtube-media-worker
+    ports:
+      - "3001:3001"
+    environment:
+      - PORT=3001
+      - MEDIA_WORKER_SECRET=${MEDIA_WORKER_SECRET}
+      - DEEPGRAM_API_KEY=${DEEPGRAM_API_KEY}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3001/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - youtube-transcripts
+
+  # Next.js Application (optional - for local development with Docker)
+  # Uncomment if you want to run Next.js in Docker as well
+  # nextjs-app:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile.nextjs  # You would need to create this
+  #   container_name: youtube-nextjs-app
+  #   ports:
+  #     - "3000:3000"
+  #   environment:
+  #     - YOUTUBE_API_KEY=${YOUTUBE_API_KEY}
+  #     - YOUTUBE_CHANNEL_ID=${YOUTUBE_CHANNEL_ID}
+  #     - SUPABASE_URL=${SUPABASE_URL}
+  #     - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+  #     - DEEPGRAM_API_KEY=${DEEPGRAM_API_KEY}
+  #     - MEDIA_WORKER_URL=http://media-worker:3001
+  #     - MEDIA_WORKER_SECRET=${MEDIA_WORKER_SECRET}
+  #     - LANG_HINT=${LANG_HINT:-en}
+  #   depends_on:
+  #     - media-worker
+  #   networks:
+  #     - youtube-transcripts
+
+networks:
+  youtube-transcripts:
+    driver: bridge

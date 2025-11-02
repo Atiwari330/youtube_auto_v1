@@ -1,0 +1,21 @@
+{
+  "buildCommand": "npm run build",
+  "outputDirectory": ".next",
+  "framework": "nextjs",
+  "regions": ["iad1"],
+  "env": {
+    "YOUTUBE_API_KEY": "@youtube_api_key",
+    "YOUTUBE_CHANNEL_ID": "@youtube_channel_id",
+    "SUPABASE_URL": "@supabase_url",
+    "SUPABASE_SERVICE_ROLE_KEY": "@supabase_service_role_key",
+    "DEEPGRAM_API_KEY": "@deepgram_api_key",
+    "MEDIA_WORKER_URL": "@media_worker_url",
+    "MEDIA_WORKER_SECRET": "@media_worker_secret",
+    "LANG_HINT": "en"
+  },
+  "functions": {
+    "app/api/check/route.ts": {
+      "maxDuration": 300
+    }
+  }
+}
