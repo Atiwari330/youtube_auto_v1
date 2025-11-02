@@ -8,7 +8,17 @@
       "Bash(git commit:*)",
       "Bash(git remote add:*)",
       "Bash(git branch:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(git push:*)",
+      "WebSearch",
+      "Bash(npm install:*)",
+      "WebFetch(domain:www.balldontlie.io)",
+      "WebFetch(domain:api-sports.io)",
+      "WebFetch(domain:docs.balldontlie.io)",
+      "WebFetch(domain:zuplo.com)",
+      "WebFetch(domain:site.api.espn.com)",
+      "Bash(npm run fetch:*)",
+      "Bash(git rev-list:*)"
     ],
     "deny": [],
     "ask": []

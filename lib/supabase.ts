@@ -269,3 +269,122 @@ export async function fetchTranscriptByVideoId(videoId: string): Promise<Transcr
 
   return data as Transcript
 }
+
+// ============================================================================
+// Analysis Operations
+// ============================================================================
+
+export type AgentType = 'must_roster' | 'watch_list' | 'drop' | 'injury_return'
+
+export interface Analysis {
+  id: string
+  video_id: string
+  agent_type: AgentType
+  players: any
+  summary: string
+  confidence: 'HIGH' | 'MEDIUM' | 'LOW'
+  raw_response?: string
+  created_at: string
+  updated_at: string
+}
+
+/**
+ * Insert or update an analysis result
+ * @param analysis - Analysis data from AI agent
+ */
+export async function upsertAnalysis(analysis: {
+  video_id: string
+  agent_type: AgentType
+  players: any
+  summary: string
+  confidence: 'HIGH' | 'MEDIUM' | 'LOW'
+  raw_response?: string
+  notes?: string
+}): Promise<void> {
+  const { error } = await supabase
+    .from('analysis')
+    .upsert({
+      video_id: analysis.video_id,
+      agent_type: analysis.agent_type,
+      players: analysis.players,
+      summary: analysis.summary,
+      confidence: analysis.confidence,
+      raw_response: analysis.raw_response || null,
+    }, {
+      onConflict: 'video_id,agent_type'
+    })
+
+  if (error) {
+    console.error('[supabase] Error upserting analysis:', error)
+    throw new Error(`Failed to upsert analysis for video ${analysis.video_id}, agent ${analysis.agent_type}: ${error.message}`)
+  }
+
+  console.log(`[supabase] Analysis for video ${analysis.video_id} (${analysis.agent_type}) stored: ${analysis.players.length} players`)
+}
+
+/**
+ * Fetch all analyses for a specific video
+ * @param videoId - YouTube video ID
+ * @returns Array of analyses (may be empty)
+ */
+export async function fetchAnalysesByVideoId(videoId: string): Promise<Analysis[]> {
+  const { data, error } = await supabase
+    .from('analysis')
+    .select('*')
+    .eq('video_id', videoId)
+    .order('created_at', { ascending: false })
+
+  if (error) {
+    console.error('[supabase] Error fetching analyses:', error)
+    throw new Error(`Failed to fetch analyses for video ${videoId}: ${error.message}`)
+  }
+
+  console.log(`[supabase] Fetched ${data.length} analyses for video ${videoId}`)
+  return data as Analysis[]
+}
+
+/**
+ * Fetch a specific analysis for a video and agent type
+ * @param videoId - YouTube video ID
+ * @param agentType - Type of agent analysis
+ * @returns Analysis or null if not found
+ */
+export async function fetchAnalysisByVideoIdAndType(
+  videoId: string,
+  agentType: AgentType
+): Promise<Analysis | null> {
+  const { data, error } = await supabase
+    .from('analysis')
+    .select('*')
+    .eq('video_id', videoId)
+    .eq('agent_type', agentType)
+    .single()
+
+  if (error) {
+    if (error.code === 'PGRST116') {
+      return null
+    }
+    console.error('[supabase] Error fetching analysis:', error)
+    throw new Error(`Failed to fetch analysis for video ${videoId}, agent ${agentType}: ${error.message}`)
+  }
+
+  return data as Analysis
+}
+
+/**
+ * Delete all analyses for a specific video
+ * @param videoId - YouTube video ID
+ */
+export async function deleteAnalysesByVideoId(videoId: string): Promise<void> {
+  const { error } = await supabase
+    .from('analysis')
+    .delete()
+    .eq('video_id', videoId)
+
+  if (error) {
+    console.error('[supabase] Error deleting analyses:', error)
+    throw new Error(`Failed to delete analyses for video ${videoId}: ${error.message}`)
+  }
+
+  console.log(`[supabase] Deleted all analyses for video ${videoId}`)
+}

@@ -3,14 +3,21 @@
 import { useEffect, useState } from 'react'
 import type { VideosListResponse } from '@/lib/types'
 
-export default function VideoList() {
+interface VideoListProps {
+  refreshKey?: number
+  onSelectVideo?: (videoId: string) => void
+  selectedVideoId?: string | null
+}
+
+export default function VideoList({ refreshKey, onSelectVideo, selectedVideoId }: VideoListProps) {
   const [videos, setVideos] = useState<VideosListResponse['videos']>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [transcribingId, setTranscribingId] = useState<string | null>(null)
 
   useEffect(() => {
     fetchVideos()
-  }, [])
+  }, [refreshKey])
 
   const fetchVideos = async () => {
     try {
@@ -27,6 +34,34 @@ export default function VideoList() {
       console.error('Failed to fetch videos:', err)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleTranscribe = async (videoId: string) => {
+    setTranscribingId(videoId)
+
+    try {
+      const response = await fetch(`/api/transcribe/${videoId}`, {
+        method: 'POST',
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || `HTTP ${response.status}`)
+      }
+
+      // Refresh video list
+      await fetchVideos()
+
+      // Auto-select the transcribed video
+      if (onSelectVideo) {
+        onSelectVideo(videoId)
+      }
+    } catch (err) {
+      console.error('Failed to transcribe video:', err)
+      alert(`Failed to transcribe: ${(err as Error).message}`)
+    } finally {
+      setTranscribingId(null)
     }
   }
 
@@ -113,35 +148,89 @@ export default function VideoList() {
               <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                 Status
               </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                Actions
+              </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
-            {videos.map((video) => (
-              <tr
-                key={video.id}
-                className="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
-              >
-                <td className="px-6 py-4">
-                  <a
-                    href={`https://www.youtube.com/watch?v=${video.id}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-blue-600 dark:text-blue-400 hover:underline font-medium"
-                  >
-                    {video.title}
-                  </a>
-                </td>
-                <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">
-                  {formatDate(video.published_at)}
-                </td>
-                <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">
-                  {formatDuration(video.duration_sec)}
-                </td>
-                <td className="px-6 py-4">
-                  {getStatusBadge(video.status)}
-                </td>
-              </tr>
-            ))}
+            {videos.map((video) => {
+              const isTranscribing = transcribingId === video.id
+              const isSelected = selectedVideoId === video.id
+
+              return (
+                <tr
+                  key={video.id}
+                  className={`transition-colors ${
+                    isSelected
+                      ? 'bg-blue-50 dark:bg-blue-900/20'
+                      : 'hover:bg-slate-50 dark:hover:bg-slate-700/50'
+                  }`}
+                >
+                  <td className="px-6 py-4">
+                    <a
+                      href={`https://www.youtube.com/watch?v=${video.id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 dark:text-blue-400 hover:underline font-medium"
+                    >
+                      {video.title}
+                    </a>
+                  </td>
+                  <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">
+                    {formatDate(video.published_at)}
+                  </td>
+                  <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">
+                    {formatDuration(video.duration_sec)}
+                  </td>
+                  <td className="px-6 py-4">
+                    {getStatusBadge(video.status)}
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="flex gap-2">
+                      {video.status === 'queued' && (
+                        <button
+                          onClick={() => handleTranscribe(video.id)}
+                          disabled={isTranscribing}
+                          className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded
+                                     disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        >
+                          {isTranscribing ? 'Transcribing...' : 'Transcribe'}
+                        </button>
+                      )}
+                      {video.status === 'processing' && (
+                        <span className="px-3 py-1 text-sm text-slate-500 dark:text-slate-400 italic">
+                          Processing...
+                        </span>
+                      )}
+                      {video.status === 'succeeded' && onSelectVideo && (
+                        <button
+                          onClick={() => onSelectVideo(video.id)}
+                          className={`px-3 py-1 text-sm font-medium rounded transition-colors ${
+                            isSelected
+                              ? 'bg-blue-600 text-white'
+                              : 'bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300'
+                          }`}
+                        >
+                          {isSelected ? 'Selected' : 'View'}
+                        </button>
+                      )}
+                      {video.status === 'failed' && (
+                        <button
+                          onClick={() => handleTranscribe(video.id)}
+                          disabled={isTranscribing}
+                          className="px-3 py-1 bg-red-100 hover:bg-red-200 dark:bg-red-900/30 dark:hover:bg-red-900/50
+                                     text-red-700 dark:text-red-300 text-sm font-medium rounded
+                                     disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        >
+                          {isTranscribing ? 'Retrying...' : 'Retry'}
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       </div>

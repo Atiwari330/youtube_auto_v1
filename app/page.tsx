@@ -1,8 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import TranscriptCard from '@/components/TranscriptCard'
 import VideoList from '@/components/VideoList'
+import AnalysisSection from '@/components/AnalysisSection'
 import type { CheckVideosResponse } from '@/lib/types'
 
 export default function Home() {
@@ -10,6 +10,7 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<CheckVideosResponse | null>(null)
   const [refreshKey, setRefreshKey] = useState(0)
+  const [selectedVideoId, setSelectedVideoId] = useState<string | null>(null)
 
   const handleCheckVideos = async () => {
     setLoading(true)
@@ -21,7 +22,7 @@ export default function Home() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ limit: 5 }),
+        body: JSON.stringify({ limit: 10 }),
       })
 
       if (!response.ok) {
@@ -40,6 +41,10 @@ export default function Home() {
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleSelectVideo = (videoId: string) => {
+    setSelectedVideoId(videoId)
   }
 
   return (
@@ -84,10 +89,10 @@ export default function Home() {
                     d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                   />
                 </svg>
-                Processing...
+                Fetching...
               </span>
             ) : (
-              'Check for new videos'
+              'Fetch Recent Videos'
             )}
           </button>
         </div>
@@ -99,46 +104,34 @@ export default function Home() {
           </div>
         )}
 
-        {result && result.processed.length > 0 && (
+        {result && (
           <div className="mb-6 p-4 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-lg">
             <p className="text-green-800 dark:text-green-200 font-medium">
-              ✓ Successfully processed {result.processed.length} video{result.processed.length !== 1 ? 's' : ''}
+              {result.message}
             </p>
           </div>
         )}
 
-        {result && result.processed.length === 0 && (
-          <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg">
-            <p className="text-blue-800 dark:text-blue-200">
-              No new uploads found. All recent videos have already been transcribed.
-            </p>
-          </div>
-        )}
-
-        {/* Latest Transcript */}
-        {result?.latest && (
-          <div className="mb-8">
+        {/* Selected Video Analysis */}
+        {selectedVideoId && (
+          <div className="mb-12">
             <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-4">
-              Latest Transcript
+              AI Analysis
             </h2>
-            <TranscriptCard transcript={result.latest} />
-          </div>
-        )}
-
-        {!result?.latest && !loading && !error && (
-          <div className="mb-8 p-8 bg-white dark:bg-slate-800 rounded-lg shadow-md text-center">
-            <p className="text-slate-500 dark:text-slate-400">
-              No transcripts yet. Click the button above to check for new videos.
-            </p>
+            <AnalysisSection videoId={selectedVideoId} />
           </div>
         )}
 
         {/* Recent Videos List */}
         <div className="mt-12">
           <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-4">
-            Recently Processed Videos
+            Recent Videos
           </h2>
-          <VideoList key={refreshKey} />
+          <VideoList
+            refreshKey={refreshKey}
+            onSelectVideo={handleSelectVideo}
+            selectedVideoId={selectedVideoId}
+          />
         </div>
       </div>
     </div>

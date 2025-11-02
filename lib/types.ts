@@ -40,8 +40,9 @@ export interface LatestTranscriptResponse {
 }
 
 export interface CheckVideosResponse {
-  processed: string[] // Array of video IDs that were processed
-  latest: LatestTranscriptResponse | null
+  saved: string[] // Array of video IDs that were saved to database
+  count: number // Total number of recent videos found
+  message: string
 }
 
 export interface VideosListResponse {
