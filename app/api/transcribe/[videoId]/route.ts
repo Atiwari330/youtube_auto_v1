@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { fetchTranscriptByVideoId, markVideoSucceeded, markVideoFailed, insertTranscript, upsertVideo } from '@/lib/supabase'
 import { transcribeVideo } from '@/lib/media-worker-client'
+import { getVideoDetails, durationToSeconds } from '@/lib/youtube'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -35,11 +36,29 @@ export async function POST(
     const videoUrl = `https://www.youtube.com/watch?v=${videoId}`
 
     try {
-      // Mark as processing
+      // Fetch video metadata from YouTube
+      const videoDetails = await getVideoDetails(videoId)
+
+      if (!videoDetails) {
+        console.error(`[api/transcribe] Video ${videoId} not found on YouTube`)
+        return NextResponse.json(
+          {
+            success: false,
+            error: 'Video not found',
+            message: 'Could not fetch video details from YouTube',
+          },
+          { status: 404 }
+        )
+      }
+
+      const durationSec = videoDetails.duration ? durationToSeconds(videoDetails.duration) : null
+
+      // Mark as processing with actual metadata
       await upsertVideo({
         id: videoId,
-        title: '', // Will be updated if needed
-        published_at: new Date().toISOString(),
+        title: videoDetails.title,
+        published_at: videoDetails.publishedAt,
+        duration_sec: durationSec,
         status: 'processing',
       })
 

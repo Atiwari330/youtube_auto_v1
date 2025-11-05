@@ -103,7 +103,7 @@ app.post('/transcribe', async (req: Request, res: Response) => {
     // Step 4: Download audio using yt-dlp
     await new Promise<void>((resolve, reject) => {
       const ytdlp = spawn('yt-dlp', [
-        '-f', 'bestaudio',
+        '-f', 'bestaudio/best',
         '-o', tempAudioFile!,
         videoUrl
       ])
