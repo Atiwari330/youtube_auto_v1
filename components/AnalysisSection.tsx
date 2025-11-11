@@ -7,7 +7,7 @@ interface AnalysisSectionProps {
   videoId: string | null
 }
 
-type AgentType = 'must_roster' | 'watch_list' | 'drop' | 'injury_return'
+type AgentType = 'must_roster' | 'watch_list' | 'drop' | 'injury_return' | 'sell_high' | 'buy_low'
 
 interface AgentConfig {
   type: AgentType
@@ -46,6 +46,20 @@ const AGENTS: AgentConfig[] = [
     color: 'bg-green-600',
     hoverColor: 'hover:bg-green-700',
   },
+  {
+    type: 'sell_high',
+    label: 'Sell High',
+    emoji: '💰',
+    color: 'bg-purple-600',
+    hoverColor: 'hover:bg-purple-700',
+  },
+  {
+    type: 'buy_low',
+    label: 'Buy Low',
+    emoji: '📉',
+    color: 'bg-blue-600',
+    hoverColor: 'hover:bg-blue-700',
+  },
 ]
 
 export default function AnalysisSection({ videoId }: AnalysisSectionProps) {
@@ -54,6 +68,8 @@ export default function AnalysisSection({ videoId }: AnalysisSectionProps) {
     watch_list: null,
     drop: null,
     injury_return: null,
+    sell_high: null,
+    buy_low: null,
   })
 
   const [loading, setLoading] = useState<Record<AgentType, boolean>>({
@@ -61,6 +77,8 @@ export default function AnalysisSection({ videoId }: AnalysisSectionProps) {
     watch_list: false,
     drop: false,
     injury_return: false,
+    sell_high: false,
+    buy_low: false,
   })
 
   const [errors, setErrors] = useState<Record<AgentType, string | null>>({
@@ -68,6 +86,8 @@ export default function AnalysisSection({ videoId }: AnalysisSectionProps) {
     watch_list: null,
     drop: null,
     injury_return: null,
+    sell_high: null,
+    buy_low: null,
   })
 
   // Check if any agent is currently running

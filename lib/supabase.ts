@@ -274,7 +274,7 @@ export async function fetchTranscriptByVideoId(videoId: string): Promise<Transcr
 // Analysis Operations
 // ============================================================================
 
-export type AgentType = 'must_roster' | 'watch_list' | 'drop' | 'injury_return'
+export type AgentType = 'must_roster' | 'watch_list' | 'drop' | 'injury_return' | 'sell_high' | 'buy_low'
 
 export interface Analysis {
   id: string

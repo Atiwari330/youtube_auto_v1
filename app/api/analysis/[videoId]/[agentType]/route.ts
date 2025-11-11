@@ -4,6 +4,8 @@ import { mustRosterAgent } from '@/lib/agents/must-roster-agent'
 import { watchListAgent } from '@/lib/agents/watch-list-agent'
 import { dropAgent } from '@/lib/agents/drop-agent'
 import { injuryReturnAgent } from '@/lib/agents/injury-return-agent'
+import { sellHighAgent } from '@/lib/agents/sell-high-agent'
+import { buyLowAgent } from '@/lib/agents/buy-low-agent'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -14,6 +16,8 @@ const AGENT_MAP = {
   watch_list: watchListAgent,
   drop: dropAgent,
   injury_return: injuryReturnAgent,
+  sell_high: sellHighAgent,
+  buy_low: buyLowAgent,
 } as const
 
 const AGENT_LABELS = {
@@ -21,6 +25,8 @@ const AGENT_LABELS = {
   watch_list: 'Watch List',
   drop: 'Drop Candidates',
   injury_return: 'Injury Returns',
+  sell_high: 'Sell High',
+  buy_low: 'Buy Low',
 }
 
 /**

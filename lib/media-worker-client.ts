@@ -56,6 +56,10 @@ export async function transcribeVideo(
     }
 
     try {
+      console.log(`[media-worker] Attempt ${attempt + 1}: Calling ${MEDIA_WORKER_URL}/transcribe`)
+      console.log(`[media-worker] Request body:`, { videoUrl, langHint, mode })
+      console.log(`[media-worker] HMAC signature: ${signature.substring(0, 10)}...`)
+
       const response = await fetch(`${MEDIA_WORKER_URL}/transcribe`, {
         method: 'POST',
         headers: {
@@ -67,10 +71,14 @@ export async function transcribeVideo(
         signal: AbortSignal.timeout(30 * 60 * 1000),
       })
 
+      console.log(`[media-worker] Response status: ${response.status} ${response.statusText}`)
+
       if (!response.ok) {
         const errorData: MediaWorkerError = await response.json().catch(() => ({
           error: `HTTP ${response.status}: ${response.statusText}`,
         }))
+
+        console.error('[media-worker] Error response from media worker:', errorData)
 
         throw new Error(`Media Worker error: ${errorData.error}${errorData.details ? ` - ${errorData.details}` : ''}`)
       }
@@ -83,6 +91,25 @@ export async function transcribeVideo(
     } catch (error) {
       lastError = error as Error
       console.error(`[media-worker] Attempt ${attempt + 1} failed:`, lastError.message)
+      console.error(`[media-worker] Error name: ${lastError.name}`)
+      console.error(`[media-worker] Error stack:`, lastError.stack)
+
+      // Log fetch-specific errors with diagnostics
+      if (error instanceof TypeError && lastError.message.includes('fetch')) {
+        console.error('[media-worker] ========== FETCH ERROR DIAGNOSTICS ==========')
+        console.error(`[media-worker] Target URL: ${MEDIA_WORKER_URL}/transcribe`)
+        console.error(`[media-worker] Error type: Network connectivity or DNS resolution failure`)
+        console.error(`[media-worker] Possible causes:`)
+        console.error(`[media-worker]   1. Media worker container not running (check: docker ps)`)
+        console.error(`[media-worker]   2. Wrong MEDIA_WORKER_URL in .env.local (current: ${MEDIA_WORKER_URL})`)
+        console.error(`[media-worker]   3. Port 3001 not accessible or blocked by firewall`)
+        console.error(`[media-worker]   4. Docker network issue`)
+        console.error(`[media-worker] Diagnostic commands:`)
+        console.error(`[media-worker]   - Test connectivity: curl ${MEDIA_WORKER_URL}/health`)
+        console.error(`[media-worker]   - Check Docker: docker ps | grep media-worker`)
+        console.error(`[media-worker]   - Check port: netstat -ano | findstr :3001`)
+        console.error('[media-worker] ============================================')
+      }
 
       // Don't retry on certain errors
       if (
@@ -106,14 +133,26 @@ export async function transcribeVideo(
  */
 export async function checkMediaWorkerHealth(): Promise<boolean> {
   try {
+    console.log(`[media-worker] Running health check: ${MEDIA_WORKER_URL}/health`)
     const response = await fetch(`${MEDIA_WORKER_URL}/health`, {
       method: 'GET',
       signal: AbortSignal.timeout(5000), // 5 second timeout
     })
 
-    return response.ok
+    if (response.ok) {
+      const data = await response.json()
+      console.log('[media-worker] Health check passed:', data)
+      return true
+    } else {
+      console.error(`[media-worker] Health check failed with status: ${response.status}`)
+      return false
+    }
   } catch (error) {
     console.error('[media-worker] Health check failed:', (error as Error).message)
+    console.error('[media-worker] Error name:', (error as Error).name)
+    if (error instanceof TypeError && (error as Error).message.includes('fetch')) {
+      console.error('[media-worker] Cannot reach media worker - is Docker container running?')
+    }
     return false
   }
 }
